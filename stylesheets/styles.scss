@@ -290,9 +290,8 @@ div.news-boxed {
     margin-bottom: 5px;
 }
 
-div.note {
-    border: 1px solid #7dcf7d;
-    background-color: #dff0d8;
+div.note, div.tip {
+    border: 1px solid #dff0d8;
 }
 
 div.admonitionblock .content {
@@ -305,20 +304,21 @@ div.admonitionblock {
     margin-bottom: 15px;
 }
 
-div.admonitionblock .icon .title {
-    font-weight: bold;
-    color: #404040;
-    border-right: 1px solid silver;
+div.admonitionblock td.icon {
+    color: #111;
+    font-size: 200%;
+    background-color: #dff0d8;
     padding: 10px;
-    text-transform: uppercase;
+    min-width: 2em;
+    text-align: center;
 }
 
 div.admonitionblock td.icon .icon-tip:before {
     content: "\f0eb";
-    color: #111;
-    font-size: 200%;
-    border-right: 1px solid silver;
-    padding: 10px;
+ }
+
+div.admonitionblock td.icon .icon-note:before {
+    content: "\f05a";
 }
 
 span.tags a {

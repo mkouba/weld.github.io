@@ -1,0 +1,113 @@
+---
+layout: news
+title: Weld Tip 4 - Life outside of Java EE
+author: Martin Kouba
+priority: 1
+change_frequency: weekly
+excerpt: In this article, we're going to explore several possibilities of how Weld can be used outside of the Java EE universe.
+desc: Weld Tip 4 - Life outside of Java EE
+tags: [tips]
+---
+:linkattrs:
+:toc: macro
+:toc-title: Contents
+:icons: font
+
+toc::[]
+
+CDI is usually perceived as a Java EE technology.
+It makese sense - it's a JCP specification, developed as an integral part of Java EE platform.
+On the other hand, CDI is not bound to Java EE.
+And sooner or later any application needs some reasonable way of managing components and handling dependencies.
+Otherwise sustainability is not too realistic.
+In this article, we're going to explore several possibilities of how Weld can be used outside of the Java EE universe.
+
+== Parts which could be problematic
+
+To be fair we should mention the parts which could be problematic.
+Using Weld outside Java EE is not difficult but there are few things we should be aware of.
+Up to the upcoming CDI 2.0 the discovery outside Java EE is undefined, i.e. _implementation specific_.
+Both Weld SE and Weld Servlet support bean archive isolation and link:/news/2016/10/25/tip3-performance/#discovery_mode[implicit bean archives] _with_ `beans.xml`.
+Implicit bean archives _without_ `beans.xml` are only supported in Weld SE.
+See also link:http://docs.jboss.org/weld/reference/latest/en-US/html/environments.html[Application servers and environments supported by Weld, window="_blank"].
+
+Also not all built-in contexts are activated automatically outside Java EE:
+
+* icon:thumbs-o-up[] `@ApplicationScoped` and `@Singleton` contexts are always active
+* icon:thumbs-o-up[] `@Dependent` pseudo-scope is always active
+* icon:thumbs-down[] other built-in context need to be activated if used
+** icon:thumbs-o-up[] since 2.4 you can use `@org.jboss.weld.context.activator.ActivateRequestContext` interceptor binding to activate the request context within a business method invocation
+** icon:thumbs-o-up[] link:http://docs.jboss.org/weld/reference/latest/en-US/html/contexts.html[Weld Context Management API, window="_blank"] is really powerful and usable
+
+== Weld artifacts
+
+If you want to use Weld in _Java SE and control the container bootstrap_, you'll have to add `org.jboss.weld.se:weld-se-core` dependency to your project.
+The core artifact contains programmatic bootstrap API and SE specific .
+There is also a convenient shaded jar with all dependencies (uber jar) - `org.jboss.weld.se:weld-se` (in Weld 3.x renamed to `weld-se-shaded`).
+
+If you want to use Weld in _a Servlet container_ (Tomcat, Jetty), you'll have to add `org.jboss.weld.servlet:weld-servlet-core` dependency to your project.
+The core artifact contains integration code for all supported containers.
+There is also a convenient shaded jar with all dependencies (uber jar) - `org.jboss.weld.servlet:weld-servlet` (in Weld 3.x renamed to `weld-servlet-shaded`).
+
+NOTE: Weld SE and Servlet can be used side by side, e.g. when you need to start an embedded servlet container after Weld bootstrap. See also link:http://docs.jboss.org/weld/reference/latest/en-US/html/environments.html#_weld_se_and_weld_servlet_cooperation[Weld SE and Weld Servlet cooperation, window="_blank"].
+
+== Weld SE programmatic bootstrap API
+
+TODO inspiration for CDI 2.0
+
+[source,java]
+----
+public class Main {
+
+    public static void main(String[] args) {
+        try (WeldContainer container = new Weld().initialize()) {
+            container.select(Foo.class).get().ping();
+        }
+    }
+}
+----
+
+== Servlet containers
+
+* Tomcat
+* Jetty
+* Undertow
+
+== JBoss Forge
+
+Forge is using Weld as one of the dependency injection provider.
+
+== Vert.x
+
+Vert.x is a toolkit for building reactive applications on the JVM.
+One of the supported languages is logically Java.
+Vert.x programming model is not very opinionated.
+Core concepts are based on asynchronous callbacks and events, and Verticle components.
+But sometimes if you need to write "ordinary" business logic it's better to switch back to synchronous world.
+
+[source,java]
+----
+public class WeldVerticle extends AbstractVerticle {
+
+    private WeldContainer weldContainer;
+
+    public void start() throws Exception {
+        weldContainer = new Weld().containerId(deploymentID()).initialize();
+    }
+
+    public void stop() throws Exception {
+        if (weldContainer != null) {
+            weldContainer.shutdown();
+        }
+    }
+}
+----
+
+
+=== Weld Vert.x extensions
+
+TODO mention Weld Vert.x extensions and link articles
+
+== Ceylon
+
+== Dagger2

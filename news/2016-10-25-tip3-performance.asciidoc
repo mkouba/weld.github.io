@@ -31,6 +31,8 @@ During bootstrap the overhead of a framework should be minimal so that it does n
 However, CDI needs to do all that magic behind the scenes - read annotations, build and validate metadata, etc.
 The following sections describe what could be done to minimize the impact.
 
+anchor:discovery_mode[]
+
 === Discovery mode
 
 In CDI 1.0 there was only one _"discovery mode"_.
