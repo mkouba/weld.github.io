@@ -143,6 +143,537 @@
               </h1>
               <div class="post">
                 <h2>
+                  <a href="/news/2014/12/10/an-update-on-weld-3/">An update on Weld 3</a>
+                </h2>
+                <div class="news-date news-boxed">
+                  2014-12-10
+                  &nbsp;
+                  <span class="tags">
+                    <i class="fa fa-tags"></i>
+                    <a href="/news/tags/cdi2">cdi2</a>
+                  </span>
+                  &nbsp;
+                  <i class="fa fa-pencil"></i>
+                  Jozef Hartinger
+                </div>
+                <p></p>
+                <div class="content">
+                  <div class="paragraph">
+                  <p>Today we are releasing the third Alpha release of Weld 3. These Alpha releases serve
+                  as prototypes of changes currently being discussed by the CDI expert group for
+                  the upcoming CDI 2.0.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>The Alpha releases are not suitable for production use as the new API and functionality
+                  are still subject to change. We are releasing them to allow the community to test-drive
+                  the changes early in the development cycle. We want to shorten the feedback loop and
+                  identify possible glitches as soon as possible.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Let’s just quickly review what has been available since Alpha1:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>declarative ordering of observer methods using <code>@Priority</code></p>
+                  </li>
+                  <li>
+                  <p>ability for an extension to veto and modify an observer method</p>
+                  </li>
+                  <li>
+                  <p>support for Java 8 repeatable annotations as qualifiers and interceptor bindings</p>
+                  </li>
+                  <li>
+                  <p>enhanced <code>AnnotatedType</code> API</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="paragraph">
+                  <p>For more details and examples of these features see my
+                  <a href="http://weld.cdi-spec.org/news/2014/10/02/weld-300Alpha1/">previous blog post</a>.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>On top of this, we’re now adding the <strong>following new features and enhancements</strong>:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>asynchronous events</p>
+                  </li>
+                  <li>
+                  <p>simplified configuration of Weld-specific properties</p>
+                  </li>
+                  <li>
+                  <p>Guava is no longer used internally</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_asynchronous_events">Asynchronous events</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>Since its first version CDI has provided events as a facility for component interaction.
+                  Events enable loose coupling while preserving type safety.
+                  So far, CDI has supported synchronous delivery of events - the calling thread blocks
+                  until invocations of all associated observer methods complete. An alternative to
+                  this are transactional observer methods which are called asynchronously at the end
+                  of a transaction.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>For the upcoming CDI 2.0 specification one of the hot topics is enhancement of the
+                  events facility. The expert group is
+                  <a href="https://docs.google.com/document/d/1pDO7gru6YuEyTDdK3XBozvXZYucT9uC7McZMffSZun4/edit?usp=sharing">considering adding fully asynchronous event dispatching mechanism</a>.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>A working prototype of this is available in Weld 3.0.0.Alpha3. The current proposal
+                  adds a method called <code>fireAsync</code> to the existing <code>Event</code> interface.</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">@Inject&#x000A;    private ExperimentalEvent&lt;Configuration&gt; event;&#x000A;    …&#x000A;    event.fireAsync(new Configuration());</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>The call to <code>event.fireAsync()</code> returns immediately. The event is delivered to
+                  corresponding observers in a dedicated thread pool that can be configured.</p>
+                  </div>
+                  <div class="sect2">
+                  <h3 id="_what_about_thread_safety">What about thread-safety?</h3>
+                  <div class="paragraph">
+                  <p>There are two common usage pattens for events. In the first one an immutable event
+                  object is used. An alternative is to use mutable events. A mutable event allows
+                  observers to participate on the result which is later used by the component that
+                  fired the event. An example of this would be the
+                  <a href="https://docs.oracle.com/javaee/6/api/javax/enterprise/inject/spi/ProcessAnnotatedType.html">ProcessAnnotatedType&lt;T&gt;</a>
+                  event used by CDI extensions. When events are fired synchronously, both
+                  approaches work fine but how does this work when we switch to async?</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Nothing changes actually. No matter if the event object is immutable or not, you
+                  do not have to worry about thread-safety of the event object. The current implementation
+                  comes with the guarantee that event object is safely published which means that
+                  an observer method observes the event in the state in which:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>it was left by an observer executing before the given observer, or</p>
+                  </li>
+                  <li>
+                  <p>the initial state of the event if the given observer is the first one</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="paragraph">
+                  <p>Furthermore, the state is consistent throughout the execution of an observer method
+                  which means that we guarantee safe publication and prevent races for you. The only
+                  thing that should be avoided is modifying the state of the event object outside of
+                  an observer method. This behavior matches the
+                  <a href="https://docs.google.com/document/d/1lFtgLm6hY-uECdA1r0Sfimq6vkVYThoUZsevPUaSP0E/edit?usp=sharing">option 4.1.1.1 in the current spec proposal</a>.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Update: new <a href="https://docs.google.com/document/d/1pDO7gru6YuEyTDdK3XBozvXZYucT9uC7McZMffSZun4/edit?usp=sharing">link for a planning document</a></p>
+                  </div>
+                  <div class="paragraph">
+                  <p>In addition, if observer methods are ordered (another new feature proposed for CDI 2.0)
+                  we preserve the ordering (as in such situation the observers are ordered for a reason!)
+                  and invoke observers in the given order.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Last but not least, if an observer is transactional, we again preserve this and
+                  invoke the observer method in the corresponding transaction phase.</p>
+                  </div>
+                  </div>
+                  <div class="sect2">
+                  <h3 id="_how_do_i_know_when_event_delivery_finishes_and_what_about_exceptions">How do I know when event delivery finishes and what about exceptions?</h3>
+                  <div class="paragraph">
+                  <p>In the current prototype we’re reusing the
+                  <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletionStage.html">CompletionStage</a>
+                  API, introduced in Java 8, which allows actions (callbacks) to be bound to the completion of the
+                  asynchronous delivery process. This is what it looks like:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">event.fireAsync(new Configuration()).thenAccept(config -&gt; master.compute(config));</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>This piece of code starts with asynchronously firing a mutable configuration object
+                  allowing loosely-coupled observers to alter the configuration of a computation.
+                  Once all observers finish, computation is initiated based on the resulting configuration.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>If an exception occurs this can be dealt with also, either by falling back to a default value</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">event.fireAsync(new Configuration())&#x000A;        .exceptionally(throwable -&gt; DEFAULT_CONFIGURATION)&#x000A;        .thenAccept((config) -&gt; master.compute(config));</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>or by executing arbitrary code:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">event.fireAsync(new Configuration()).whenComplete((config, throwable) -&gt; {&#x000A;        if (throwable != null) {&#x000A;            System.err.println("Oops. Failed because of " + throwable.getMessage());&#x000A;        } else {&#x000A;            master.compute(config);&#x000A;        }&#x000A;    });</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p><code>CompletionStage</code> allows much more. If you are unfamiliar with the API see the
+                  <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletionStage.html">Javadoc</a>
+                  page for more information.</p>
+                  </div>
+                  </div>
+                  <div class="sect2">
+                  <h3 id="_how_do_i_try_this_myself">How do I try this myself?</h3>
+                  <div class="paragraph">
+                  <p>It’s easy and multiple options are available. First of them is to use Weld in a
+                  <strong>standalone application</strong>.</p>
+                  </div>
+                  <div class="olist arabic">
+                  <ol class="arabic">
+                  <li>
+                  <p>Create a new Java SE application.</p>
+                  </li>
+                  <li>
+                  <p>Add dependency on Weld</p>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">&lt;dependency&gt;&#x000A;        &lt;groupId&gt;org.jboss.weld.se&lt;/groupId&gt;&#x000A;        &lt;artifactId&gt;weld-se-core&lt;/artifactId&gt;&#x000A;        &lt;version&gt;3.0.0.Alpha3&lt;/version&gt;&#x000A;    &lt;/dependency&gt;</code></pre>
+                  </div>
+                  </div>
+                  </li>
+                  <li>
+                  <p>Create an empty <code>beans.xml</code> file, e.g.</p>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-shell" data-lang="shell">mkdir src/main/resources/META-INF&#x000A;    touch src/main/resources/META-INF/beans.xml</code></pre>
+                  </div>
+                  </div>
+                  </li>
+                  <li>
+                  <p>Launch Weld and fire an event asynchronously</p>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">public static void main(String[] args) {&#x000A;        WeldContainer weld = new Weld().initialize();&#x000A;        Event&lt;String&gt; evnt = weld.event().select(String.class);&#x000A;        ExperimentalEvent&lt;String&gt; event = (ExperimentalEvent&lt;String&gt;) evnt;&#x000A;    &#x000A;        event.fireAsync("message");&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  </li>
+                  </ol>
+                  </div>
+                  <div class="sect3">
+                  <h4 id="_wildfly">WildFly</h4>
+                  <div class="paragraph">
+                  <p>Alternatively, a patch is available for WildFly that upgrades Weld within an existing WildFly instance. See the
+                  <a href="http://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha3">download page</a>
+                  for more details.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Note that these new prototyped APIs are not part of the CDI API yet. Instead, they are currently located
+                  in
+                  <a href="http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.jboss.weld%22%20AND%20a%3A%22weld-api%22">Weld API</a>
+                  in a package named
+                  <a href="http://docs.jboss.org/weld/javadoc/3.0/weld-api/org/jboss/weld/experimental/package-frame.html">org.jboss.weld.experimental</a></p>
+                  </div>
+                  <div class="paragraph">
+                  <p>All these altered APIs have the <code>Experimental</code> prefix (that&#8217;s why we are using <code>ExperimentalEvent</code> in the examples)</p>
+                  </div>
+                  <div class="paragraph">
+                  <p><strong>We would appreciate your feedback!</strong> Feel free to use
+                  <a href="https://community.jboss.org/en/weld?view=discussions">Weld forums</a>
+                  or the
+                  <a href="https://lists.jboss.org/mailman/listinfo/cdi-dev">cdi-dev mailing list</a>
+                  for this purpose.</p>
+                  </div>
+                  </div>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_what_s_next">What’s next?</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>We are going to continue releasing early prototypes of features currently proposed for
+                  CDI 2.0. The plan is to release a new Alpha version every 3 weeks. There are several
+                  areas we want to focus on:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>simplifying how extensions register beans and observers</p>
+                  </li>
+                  <li>
+                  <p>monitoring and debugging of CDI applications</p>
+                  </li>
+                  <li>
+                  <p>experimenting with full interception (intercepting even calls within a given component)</p>
+                  </li>
+                  <li>
+                  <p>splitting the codebase into a “light” and “full” version (to support proposed <strong>CDI light</strong> version)</p>
+                  </li>
+                  <li>
+                  <p>bootstrap API for SE environment</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="paragraph">
+                  <p>&#91; <a href="http://docs.jboss.org/weld/javadoc/3.0/weld-api/org/jboss/weld/experimental/package-frame.html">Experimental API documentation</a> &#93;
+                  &#91; <a href="https://issues.jboss.org/secure/ReleaseNote.jspa?projectId=12310891&amp;version=12325836">Release notes</a> &#93;
+                  &#91; <a href="https://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha3">Distribution</a> &#93;
+                  &#91; Patch for Wildfly
+                  (<a href="http://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha3/wildfly-8.2.0.Final-weld-3.0.0.Alpha3-patch.zip/download">8.2</a>,
+                  <a href="http://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha3/wildfly-9.0.0.Alpha1-weld-3.0.0.Alpha3-patch.zip/download">9 Alpha</a>)
+                  &#93;</p>
+                  </div>
+                  </div>
+                  </div>
+                </div>
+                <hr>
+              </div>
+              <div class="post">
+                <h2>
+                  <a href="/news/2014/10/02/weld-300Alpha1/">Weld 3.0.0.Alpha1 released!</a>
+                </h2>
+                <div class="news-date news-boxed">
+                  2014-10-2
+                  &nbsp;
+                  <i class="fa fa-pencil"></i>
+                  Jozef Hartinger
+                </div>
+                <p></p>
+                <div class="content">
+                  <div class="paragraph">
+                  <p>Today we are releasing Weld 3.0.0.Alpha1. This release serves as an <strong>early proof of concept</strong> of some of the ideas that are being discussed by the CDI Expert Group for the upcoming
+                  <a href="http://cdi-spec.org/">CDI 2.0 specification</a>. Furthermore, this is a great opportunity for the community to test-drive some of the proposed improvements and <strong>provide us with feedback</strong>.
+                  Be warned though that this released does not come with any guarantee of stability and that binary and functional compatibility is likely to be broken in the following releases.</p>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_ordering_of_observer_methods">Ordering of observer methods</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>The first of the new features are ordered observer methods. This requirement came up a long ago and several approaches were proposed in the meantime, as documented by
+                  <a href="https://issues.jboss.org/browse/CDI-4">CDI-4</a>.The Alpha1 release employs the general-purpose <code>@Priority</code> annotation to determine the order in which observer methods are to be notified.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>There are many open questions about this feature. Here are some of the rules we set for the purpose of this experimental implementation. These are by no means set in stone but instead we encourage you
+                  to give us feedback on these:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>Each observer method has a certain priority value. An observer method that does not define a priority explicitly is given the default priority which is 2500 (in the middle of the <code>Interceptor.Priority.APPLICATION</code> range)</p>
+                  </li>
+                  <li>
+                  <p>The priority of an observer method determines the order. An observer method with lower value is called before an observer method with higher value</p>
+                  </li>
+                  <li>
+                  <p>If multiple observer methods define the same priority value, the order is undefined</p>
+                  </li>
+                  <li>
+                  <p>Observer methods priorities should match <a href="https://javaee-spec.java.net/nonav/javadocs/javax/interceptor/Interceptor.Priority.html">existing priority range convention</a></p>
+                  </li>
+                  <li>
+                  <p>The ordering applies to both transactional and non-transactional observer methods</p>
+                  </li>
+                  <li>
+                  <p>The priority annotation is applied on the event parameter (not the observer method)</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="paragraph">
+                  <p>Here’s an example:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">public void sendWelcome(@Observes @Priority(APPLICATION + 800) @Registered User user) {&#x000A;        // ...&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>Note that <code>javax.annotation.Priority</code> can currently only be applied to types. Therefore, we temporarily created a substitute called <strong><code>org.jboss.weld.experimental.Priority</code></strong> which is identical
+                  to the original except that it can also be applied on parameters (of observer methods). The plan is to propagate this change back to <code>javax.annotation.Priority</code>. In the meantime, Weld’s twin
+                  gets the job done.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>In addition to the <code>@Priority</code> annotation, the SPI was also enhanced to expose the priority of an observer method. We are not touching <code>javax.enterprise</code> interfaces just yet. Instead,
+                  the <code>org.jboss.weld.experimental</code> package contains proposals for how the new SPI should look like. As the package name suggests, this SPI is good for a test-drive but do not expect it to be stable.
+                  To use the experimental SPIs, you&#8217;ll need to add a dependency on <a href="http://search.maven.org/#artifactdetails%7Corg.jboss.weld%7Cweld-api%7C3.0.Alpha1%7Cjar">weld-api</a>.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Here’s an example of reading the observer method priority using the SPI in an Extension. <code>ExperimentalProcessObserverMethod</code> and <code>ExperimentalObserverMethod</code> interfaces come from the
+                  <code>org.jboss.weld.experimental package</code>.</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">public class SimpleExtension implements Extension {&#x000A;    &#x000A;        void observe(@Observes ExperimentalProcessObserverMethod&lt;User, ?&gt; event) {&#x000A;            ExperimentalObserverMethod&lt;User&gt; observerMethod = event.getObserverMethod();&#x000A;            this.priority = observerMethod.getPriority();&#x000A;        }&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>Use the <a href="https://issues.jboss.org/browse/CDI-4">corresponding CDI ticket</a> for any feedback on these features.</p>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_vetoing_and_modifying_observer_methods">Vetoing and modifying observer methods</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>We’ll stay with observer methods for a few more paragraphs. A <a href="https://issues.jboss.org/browse/CDI-458">request</a> was raised in the CDI issue tracker for making it possible to disable an
+                  observer method using the <code>ProcessObserverMethod</code> SPI.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>This Alpha1 release introduces the <code>veto()</code> methods (aligned with <code>ProcessAnnotatedType.veto()</code>) for this:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">void disableDebuggingObservers(@Observes ExperimentalProcessObserverMethod&lt;?, Debug&gt; event) {&#x000A;        if (projectStage != ProjectStage.Development) {&#x000A;            event.veto();&#x000A;        }&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>In addition, the observer method metadata may be altered by an extension. This is done similarly to how <code>InjectionTarget</code>, <code>InjectionPoint</code> or <code>BeanAttribute</code> metadata are modified which
+                  is most often by wrapping the original object (decorator design pattern). Any piece of metadata (including aforementioned priority) can be altered. For example, the transaction phase:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">void alterObserver(@Observes ExperimentalProcessObserverMethod&lt;User, ?&gt; event) {&#x000A;        event.setObserverMethod(new ForwardingExperimentalObserverMethod&lt;User&gt;(event.getObserverMethod()) {&#x000A;            @Override&#x000A;            public TransactionPhase getTransactionPhase() {&#x000A;                return TransactionPhase.AFTER_SUCCESS;&#x000A;            }&#x000A;        });&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_repeatable_qualifiers_and_interceptor_bindings">Repeatable qualifiers and interceptor bindings</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>This release serves as a proof of concept for supporting repeating qualifiers and interceptor bindings. You can now fully utilize Java 8 features and use multiple qualifiers or interceptor bindings
+                  of the same type in the same location, for example:</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">public class School {&#x000A;    &#x000A;        @Produces&#x000A;        @Speaks("English")&#x000A;        @Speaks("French")&#x000A;        public Student graduate() {&#x000A;            // ...&#x000A;        }&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>Repeating qualifiers can be used for both bean and event resolution. See the <a href="http://docs.oracle.com/javase/tutorial/java/annotations/repeating.html">Java documentation</a> for how to define
+                  a repeating annotation.</p>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_interceptor_bindings_in_invocation_context">Interceptor bindings in invocation context</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>This is an often recurring scenario. An interceptor binding defines several <code>@NonBinding</code> members which serve as configuration for the interceptor. How does an interceptor get hold of these values?
+                  This is not easy as the interceptor binding may often appear on the intercepted method, the class that defined it or may be inherited from another interceptor binding or stereotype (even transitively!).
+                  This problem gave birth to utilities such as
+                  <a href="https://git-wip-us.apache.org/repos/asf?p=deltaspike.git;a=blob;f=deltaspike/core/api/src/main/java/org/apache/deltaspike/core/util/AnnotationUtils.java;h=9d4c8e2f72936facf1ef0d8d9655c4186965afde;hb=HEAD">this one</a>.
+                  Still, even after all this effort the result is not entirely correct as it was obtained using Java reflection ignoring the fact that the interceptor binding may have been modified
+                  (e.g. using <code>ProcessAnnotatedType</code>).</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>This problem is being addressed as <a href="https://issues.jboss.org/browse/CDI-468">CDI-468</a>. The Alpha1 release of Weld implements this feature and exposes new methods for obtaining interceptor bindings
+                  that are in effect for the interception. This is done using <code>ExperimentalInvocationContext.getInterceptorBindings()</code> or <code>ExperimentalInvocationContext.getInterceptorBindingsByType()</code>.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Again, <code>ExperimentalInvocationContext</code> can be found in the <code>org.jboss.weld.experimental</code> package and depicts how the future version of <code>javax.interceptor.InvocationContext</code> could look like.</p>
+                  </div>
+                  <div class="listingblock">
+                  <div class="content">
+                  <pre class="highlightjs highlight"><code class="language-java" data-lang="java">@Interceptor&#x000A;    @Secure&#x000A;    public class SecurityInterceptor {&#x000A;    &#x000A;        @Inject&#x000A;        private User user;&#x000A;    &#x000A;        @AroundInvoke&#x000A;        public Object intercept(ExperimentalInvocationContext ctx) throws Exception {&#x000A;            Secure binding = ctx.getInterceptorBindingsByType(Secure.class).iterator().next();&#x000A;            if (!user.getRoles().contains(binding.requireRole())) {&#x000A;                throw new SecurityException();&#x000A;            }&#x000A;            return ctx.proceed();&#x000A;        }&#x000A;    }</code></pre>
+                  </div>
+                  </div>
+                  <div class="paragraph">
+                  <p>Again, your feedback is welcome at <a href="https://issues.jboss.org/browse/CDI-468">CDI-468</a>.</p>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_changes_in_the_annotated_layer">Changes in the Annotated layer</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>CDI provides an abstraction over the Reflection API - <a href="http://docs.jboss.org/cdi/api/1.2/javax/enterprise/inject/spi/Annotated.html">AnnotatedType and friends</a> - which mostly allows extensions
+                  to alter the set of annotations present on a type, field, method, etc.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>The Alpha1 release contains two minor additions to this API. Firstly, the API now supports Java 8 repeating annotations with a new method <code>ExperimentalAnnotated.getAnnotationsByType(Class&lt;T&gt; annotationClass)</code></p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Secondly, it is now possible to access the <code>java.lang.reflect.Parameter</code> instance that is wrapped by <code>AnnotatedParameter</code> using <code>ExperimentalAnnotatedParameter.getJavaParameter();</code></p>
+                  </div>
+                  <div class="paragraph">
+                  <p>See <a href="https://issues.jboss.org/browse/CDI-471">CDI-471</a> and <a href="https://issues.jboss.org/browse/CDI-481">CDI-481</a> for details.</p>
+                  </div>
+                  </div>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_give_it_a_try">Give it a try!</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>&#91; <a href="http://docs.jboss.org/weld/javadoc/3.0/weld-api/org/jboss/weld/experimental/package-frame.html">Experimental API documentation</a> &#93;
+                  &#91; <a href="https://issues.jboss.org/secure/ReleaseNote.jspa?projectId=12310891&amp;version=12322333">Release notes</a> &#93;
+                  &#91; <a href="https://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha1">Distribution</a> &#93;
+                  &#91; <a href="http://sourceforge.net/projects/jboss/files/Weld/3.0.0.Alpha1/wildfly-9.0.0.Alpha1-weld-3.0.0.Alpha1-patch.zip/download">Patch for WildFly 9</a> &#93;</p>
+                  </div>
+                  </div>
+                  </div>
+                </div>
+                <hr>
+              </div>
+              <div class="post">
+                <h2>
+                  <a href="/news/2014/09/18/weld-next/">Weld.Next</a>
+                </h2>
+                <div class="news-date news-boxed">
+                  2014-9-18
+                  &nbsp;
+                  <i class="fa fa-pencil"></i>
+                  Jozef Hartinger
+                </div>
+                <p></p>
+                <div class="content">
+                  <div class="paragraph">
+                  <p>Today, we released Weld 2.2.5.Final. The fifth mostly bug-fixing release in the series addresses <a href="https://issues.jboss.org/secure/ReleaseNote.jspa?projectId=12310891&amp;version=12325389">23 issues</a>.
+                  In addition, the Servlet module got an update and among other things now supports:</p>
+                  </div>
+                  <div class="ulist">
+                  <ul>
+                  <li>
+                  <p>all three bean discovery modes (e.g. only explicitly annotated classes will be loaded as CDI beans)</p>
+                  </li>
+                  <li>
+                  <p>bean archive isolation</p>
+                  </li>
+                  <li>
+                  <p>using Jandex for faster deployment discovery</p>
+                  </li>
+                  </ul>
+                  </div>
+                  <div class="paragraph">
+                  <p>See the <a href="http://docs.jboss.org/weld/reference/2.2.5.Final/en-US/html/_application_servers_and_environments_supported_by_weld.html#_servlet_containers_such_as_tomcat_or_jetty">reference documentation </a>
+                  for details.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Talking about documentation we are grateful to <a href="http://www.next-presso.com/author/antoine/">Antoine Sabot-Durand</a> for migrating our reference documentation to <a href="http://www.methods.co.nz/asciidoc/">AsciiDoc</a>.
+                  We also thank our community contributors <strong>Antonin Stefanutti</strong> and <strong>Stefan Grossmann</strong> who contributed with pull requests.</p>
+                  </div>
+                  <div class="sect1">
+                  <h2 id="_weld_3_0">Weld 3.0</h2>
+                  <div class="sectionbody">
+                  <div class="paragraph">
+                  <p>In the coming months, our focus will be shifting towards <strong>Weld 3.0</strong> - the future reference implementation of <a href="http://cdi-spec.org/">CDI 2.0</a>.
+                  Initially, we plan on releasing Alpha releases every two weeks starting in early October.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>The Alpha releases are likely to break compatibility from time to time and will often contain bleeding edge or prototype code.
+                  The goals is however to give the CDI community a chance to test drive the proposed changes in the CDI specification as soon as possible and give quick feedback to the CDI expert group.</p>
+                  </div>
+                  <div class="paragraph">
+                  <p>Weld 3.0 will also be a good opportunity to get involved in the development of this open-source project. <strong>Interested?</strong> See our <a href="http://weld.cdi-spec.org/community/">community web page</a> for more details.</p>
+                  </div>
+                  </div>
+                  </div>
+                </div>
+                <hr>
+              </div>
+              <div class="post">
+                <h2>
                   <a href="/news/2014/04/15/weld-220-final/">Weld 2.2 (CDI 1.2 reference implementation) released!</a>
                 </h2>
                 <div class="news-date news-boxed">
@@ -377,186 +908,7 @@
                 </div>
                 <hr>
               </div>
-              <div class="post">
-                <h2>
-                  <a href="/news/2014/01/14/weld-212-final/">Three new Weld releases</a>
-                </h2>
-                <div class="news-date news-boxed">
-                  2014-1-14
-                  &nbsp;
-                  <i class="fa fa-pencil"></i>
-                  Jozef Hartinger
-                </div>
-                <p></p>
-                <div class="content">
-                  <div class="paragraph">
-                  <p>This week we are releasing three new builds of Weld. Firstly, <strong>Weld 2.1.2.Final</strong> was released. This is a bug-fixing release with 11 issues resolved. Most notably:</p>
-                  </div>
-                  <div class="ulist">
-                  <ul>
-                  <li>
-                  <p>The conversation context is now initialized lazily. This resolves the problem with custom character encoding that many of you run into. See the <a href="http://docs.jboss.org/weld/reference/2.1.2.Final/en-US/html/scopescontexts.html#d0e2009">reference documentation</a> for details.</p>
-                  </li>
-                  <li>
-                  <p>Weld now runs fine on JDK8</p>
-                  </li>
-                  <li>
-                  <p>Jetty 9.1 is now supported by weld-servlet</p>
-                  </li>
-                  </ul>
-                  </div>
-                  <div class="paragraph">
-                  <p>In addition, <strong>Weld 1.1.17.Final</strong> (CDI 1.0) was released with several bug fixes.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>Last but not least, there was a <a href="https://java.net/jira/browse/GLASSFISH-20928">memory leak identified in GlassFish</a> caused partly by GlassFish and partly by Weld. GlassFish still uses Weld 2.0. Although we do not maintain the 2.0 branch any longer and advice everyone to upgrade to Weld 2.1, the memory leak may be a problem for GlassFish users that are not able to upgrade to Weld 2.1 themselves. Therefore, we decided to do one more 2.0 release where this problem is fixed so that GlassFish users stuck on Weld 2.0 have an easy fix. Enjoy <strong>Weld 2.0.5.Final!</strong></p>
-                  </div>
-                  <div class="paragraph">
-                  <p>Now, our focus shifts completely towards Weld 2.2 where performance optimization and lowering memory consumption are the main goals. Expect first Alpha of Weld 2.2 by the end of January.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>If you are interested in Weld make sure you check our <a href="http://weld.cdi-spec.org/community/">community page</a> or the <a href="https://issues.jboss.org/issues/?filter=12320398">list of open issues awaiting contribution</a>.</p>
-                  </div>
-                </div>
-                <hr>
-              </div>
-              <div class="post">
-                <h2>
-                  <a href="/news/2013/12/11/weld-211-final/">Weld 2.1.1.Final</a>
-                </h2>
-                <div class="news-date news-boxed">
-                  2013-12-11
-                  &nbsp;
-                  <i class="fa fa-pencil"></i>
-                  Jozef Hartinger
-                </div>
-                <p></p>
-                <div class="content">
-                  <div class="paragraph">
-                  <p>Weld 2.1.1.Final was released. More than 20 issues were addressed in this release. See the <a href="https://issues.jboss.org/secure/ReleaseNote.jspa?projectId=12310891&amp;version=12322670">release notes</a> for details. Thanks to everyone involved in this release!</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>&#91; <a href="https://sourceforge.net/projects/jboss/files/Weld/2.1.1.Final">Distribution</a> &#93;
-                  &#91; <a href="https://issues.jboss.org/secure/ReleaseNote.jspa?projectId=12310891&amp;version=12322670">Release notes</a> &#93;
-                  &#91; <a href="http://docs.jboss.org/weld/reference/2.1.1.Final/en-US/html/">Documentation</a> &#93;
-                  &#91; <a href="http://docs.jboss.org/cdi/api/1.1/">CDI 1.1 Javadoc</a> &#93;</p>
-                  </div>
-                </div>
-                <hr>
-              </div>
-              <div class="post">
-                <h2>
-                  <a href="/news/2013/10/22/weld-210-final/">Weld 2.1.0.Final</a>
-                </h2>
-                <div class="news-date news-boxed">
-                  2013-10-22
-                  &nbsp;
-                  <i class="fa fa-pencil"></i>
-                  Jozef Hartinger
-                </div>
-                <p></p>
-                <div class="content">
-                  <div class="paragraph">
-                  <p>I am pleased to announce that Weld 2.1.0.Final has just been released. Weld is the reference implementation of <a href="http://cdi-spec.org">Contexts and Dependency Injection for Java EE (CDI)</a>.
-                  Here is the highlight of what’s new in Weld 2.1.0:</p>
-                  </div>
-                  <div class="ulist">
-                  <ul>
-                  <li>
-                  <p>OSGi support with Pax CDI</p>
-                  </li>
-                  <li>
-                  <p>Improved runtime performance and memory consumption</p>
-                  </li>
-                  <li>
-                  <p>Better integration with various Servlet dispatch types</p>
-                  </li>
-                  <li>
-                  <p>SLF4j was replaced with <a href="https://github.com/jboss-logging">jboss-logging</a></p>
-                  </li>
-                  <li>
-                  <p>30 fixed bugs</p>
-                  </li>
-                  </ul>
-                  </div>
-                  <div class="sect1">
-                  <h2 id="weld-osgi">The future of Weld-OSGi</h2>
-                  <div class="sectionbody">
-                  <div class="paragraph">
-                  <p><a href="http://www.slideshare.net/TrevorReznik/weldosgi-injecting-easiness-in-osgi">Weld-osgi</a> is a framework that allows the CDI programming model to be used in the OSGi environment.
-                  The framework was developed entirely by the Weld community and became a part of Weld since version 1.2.0</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>The framework provides three main features:</p>
-                  </div>
-                  <div class="olist arabic">
-                  <ol class="arabic">
-                  <li>
-                  <p>The CDI programming model can be used within OSGi bundles.</p>
-                  </li>
-                  <li>
-                  <p>The OSGi service layer and utility facilities are accessible through CDI injection</p>
-                  </li>
-                  <li>
-                  <p>The CDI event bus can be used for both inter-bundle communication and delivering OSGi events.</p>
-                  </li>
-                  </ol>
-                  </div>
-                  <div class="paragraph">
-                  <p>The weld-osgi framework served as an inspiration for a standardization effort, known as <a href="http://www.osgi.org/download/osgi-early-draft-2013-03.pdf">RFC-193</a> (formerly RFP-146).
-                  The proposal is now part of the <a href="http://www.osgi.org/download/osgi-early-draft-2013-03.pdf">OSGi early draft</a></p>
-                  </div>
-                  <div class="paragraph">
-                  <p>Due to the tight schedule of CDI 1.1, weld-osgi did never make it to Weld 2.0 and was therefore left behind, stuck in the gradually abandoned 1.2 branch.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>In the meantime, work on the reference implementation of RFC-193 begun. The reference implementation is known as <a href="https://ops4j1.jira.com/wiki/display/PAXCDI/Documentation">Pax CDI</a> and it is an open-source project hosted on <a href="https://github.com/ops4j/org.ops4j.pax.cdi">GitHub</a>.
-                  Pax CDI aims to be portable across OSGi implementations as well as CDI implementations.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>We always wanted to bring OSGi support back in Weld 2.1. However, we decided not to revive the weld-osgi framework nor align it to the new RFC-193 specification. Therefore, weld-osgi will not be merged into Weld 2.x code base.
-                  Instead, we decided to shift our focus towards Pax CDI and make sure it works well with Weld.
-                  This was done and Weld 2.1.0 is now one of the CDI runtimes supported by Pax CDI. You can play with the current <a href="https://ops4j1.jira.com/wiki/display/PAXCDI/Download">Pax CDI SNAPSHOT</a>
-                  or wait for the upcoming <a href="https://ops4j1.jira.com/browse/PAXCDI/fixforversion/11996">0.5 release</a>.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>EDIT 2013-10-30: Pax CDI 0.5.0 was released. See the <a href="http://team.ops4j.org/wiki/display/PAXCDI/2013/10/27/Pax+CDI+0.5.0+Released">release announcement</a> for more details.</p>
-                  </div>
-                  </div>
-                  </div>
-                  <div class="sect1">
-                  <h2 id="_performance">Performance</h2>
-                  <div class="sectionbody">
-                  <div class="paragraph">
-                  <p>The CDI specification requires the request, conversation and application contexts to be active during every HTTP request.
-                  Obviously, the CDI contexts are not necessary for every HTTP request. Fetching a static resource is an example of one such request.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>In Weld 2.1.0 we optimized the component that handles context activation/deactivation and cut down the overhead.
-                  In addition, it is now possible to completely suppress CDI context activation on certain types of HTTP requests should this minimized overhead still be undesired.
-                  See <a href="https://community.jboss.org/people/mkouba/blog/2013/09/18/weld&#8212;&#8203;skip-cdi-context-activation-for-some-http-requests">Martin’s blog post</a> or
-                  <a href="http://docs.jboss.org/weld/reference/latest/en-US/html/configure.html#d0e6194">the reference documentation</a> for more details.</p>
-                  </div>
-                  </div>
-                  </div>
-                  <div class="sect1">
-                  <h2 id="_acknowledgement">Acknowledgement</h2>
-                  <div class="sectionbody">
-                  <div class="paragraph">
-                  <p>We greatly appreciate your contributions to this release. Big thanks go to: Martin Kouba, Matúš Abaffy, Matej Briškár, Marko Lukša, Stuart Douglas, Marek Schmidt, Ron Šmeral, Tomáš Remeš, Max Pimm, Jesse McConnell, Harald Wellmann and Dirk Strauss.</p>
-                  </div>
-                  <div class="paragraph">
-                  <p>&#91; <a href="https://sourceforge.net/projects/jboss/files/Weld/2.1.0.Final">Distribution</a> &#93;
-                  &#91; <a href="https://issues.jboss.org/issues/?jql=project%20%3D%20WELD%20AND%20fixVersion%20in%20%28%222.1.0.Final%22%2C%20%222.1.0.Alpha1%22%2C%20%222.1.0.Beta1%22%2C%20%222.1.0.Beta2%22%2C%20%222.1.0.CR1%22%29%20ORDER%20BY%20updated%20ASC">Release notes</a> &#93;
-                  &#91; <a href="http://docs.jboss.org/weld/reference/2.1.0.Final/en-US/html/">Documentation</a> &#93;
-                  &#91; <a href="http://docs.jboss.org/cdi/api/1.1/">CDI 1.1 Javadoc</a> &#93;</p>
-                  </div>
-                  </div>
-                  </div>
-                </div>
-                <hr>
-              </div>
-              <div class="pagination-links"><a href="/news/page/6.html" class="previous-link">Previous</a> <a href="/news/" class="page-link">1</a> <a href="/news/page/2.html" class="page-link">2</a> <span class="skip">...</span><a href="/news/page/6.html" class="page-link">6</a> <span class="current-page">7</span> <a href="/news/page/8.html" class="page-link">8</a> <a href="/news/page/8.html" class="next-link">Next</a> </div>
+              <div class="pagination-links"><a href="/news/page/6.html" class="previous-link">Previous</a> <a href="/news/" class="page-link">1</a> <a href="/news/page/2.html" class="page-link">2</a> <span class="skip">...</span><a href="/news/page/6.html" class="page-link">6</a> <span class="current-page">7</span> <a href="/news/page/8.html" class="page-link">8</a> <a href="/news/page/9.html" class="page-link">9</a> <a href="/news/page/8.html" class="next-link">Next</a> </div>
               <hr>
               <div>
                 <a href="http://weld.cdi-spec.org/news.atom">
